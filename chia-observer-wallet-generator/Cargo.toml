@@ -1,0 +1,17 @@
+[package]
+name = "chia-observer-wallet-generator"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+chia-bls = "0.2.13"
+chia-wallet = { path = "./chia_rs/chia-wallet" }
+clvm-utils = { path = "./chia_rs/clvm-utils" }
+hex-literal = "0.4.1"
+hex = "0.4.3"
+sha2 = "0.10.8"
+num-bigint = "0.4.3"
+clvmr = "0.3.0"
+bech32 = "0.9.1"
