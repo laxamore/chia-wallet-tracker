@@ -145,6 +145,9 @@ impl<'a> WalletTransactionsSave<'a>
         for wallet_transaction in wallet_transactions_iter {
             wallet_transactions.push(wallet_transaction.unwrap());
         }
+
+        // sort wallet transactions by created_at_time
+        wallet_transactions.sort_by(|a, b| a.created_at_time.cmp(&b.created_at_time));
         
         // Get spreadsheet ID
         let spreadsheet_id = self
