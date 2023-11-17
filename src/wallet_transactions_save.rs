@@ -79,13 +79,13 @@ impl<'a> WalletTransactionsSave<'a>
             let mut query_stmt = self.db_connection.as_ref().expect("failed to get db_connection")
                 .prepare(query_usd_at_time)?;
             let usd_at_time_iter = query_stmt.query_map([wallet_transaction.transaction.clone().unwrap_or(String::from(""))], |row| {
-                Ok(CoinGeckoCurrentPrice {
-                    usd: Decimal::from_str(&row.get::<_, String>(0).unwrap_or("0.0".to_string())).unwrap()
+                Ok(CoinPaprikaPriceConverter {
+                    price: Decimal::from_str(&row.get::<_, String>(0).unwrap_or("0.0".to_string())).unwrap()
                 })
             })?;
 
             for usd_at_time in usd_at_time_iter {
-                if usd_at_time.unwrap().usd == Decimal::new(0, 0) {
+                if usd_at_time.unwrap().price == Decimal::new(0, 0) {
                     self.db_connection.as_ref().expect("failed to get db_connection")
                         .execute(update_usd_query, rusqlite::params![
                             get_xch_to_usd_at_time(
@@ -253,13 +253,8 @@ impl<'a> WalletTransactionsSave<'a>
 }
 
 #[derive(Debug, Deserialize)]
-struct CoinGeckoCurrentPrice {
-    usd: Decimal,
-}
-
-#[derive(Debug, Deserialize)]
-struct CoinGeckoSimplePriceResponse {
-    chia: CoinGeckoCurrentPrice,
+struct CoinPaprikaPriceConverter {
+    price: Decimal,
 }
 
 #[derive(Debug)]
@@ -325,21 +320,21 @@ where
     de.deserialize_seq(MapVisitor)
 }
 
-use chrono::{DateTime, Utc, NaiveDateTime};
+use chrono::{DateTime, Utc, NaiveDateTime, Local};
 
 async fn get_xch_to_usd_at_time(date: String, all_coin_paprika_historical_data: &mut AllCoinPaprikaHistoricalData) -> Result<Decimal, reqwest::Error> {
     let mut price = Decimal::new(0, 0);
     let timestamp = NaiveDateTime::parse_from_str(&date, "%Y-%m-%d %H:%M:%S").unwrap().timestamp();
-    let now = Utc::now().timestamp();
+    let now = Local::now().timestamp() + Local::now().offset().local_minus_utc() as i64;
 
     println!("fetching usd price at {}", date);
 
     // check if date transaction is just in range of 24 hour ago
     if timestamp > now - 86400 {
-        let url = format!("https://api.coingecko.com/api/v3/simple/price?ids=chia&vs_currencies=usd");
+        let url = format!("https://api.coinpaprika.com/v1/price-converter?base_currency_id=xch-chia-&quote_currency_id=usd-us-dollars&amount=1");
         let response = reqwest::get(&url).await?;
-        let response_json: CoinGeckoSimplePriceResponse = response.json().await?;
-        price = response_json.chia.usd;
+        let response_json: CoinPaprikaPriceConverter = response.json().await?;
+        price = response_json.price;
     } else {
         // convert timestamp to date yyyy-mm-dd
         let date = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(timestamp, 0), Utc).format("20%y-%m-%d").to_string();
@@ -362,6 +357,15 @@ mod tests {
     use std::str::FromStr;
 
     use super::*;
+
+    #[tokio::test]
+    async fn test_time() {
+        let date = String::from("2023-11-16 2:39:48");
+        let timestamp = NaiveDateTime::parse_from_str(&date, "%Y-%m-%d %H:%M:%S").unwrap().timestamp();
+        let now = Local::now().timestamp() + Local::now().offset().local_minus_utc() as i64;
+
+        assert_eq!(timestamp > now - 86400, false);
+    }
 
     #[tokio::test]
     async fn test_get_xch_to_usd_at_time() {
